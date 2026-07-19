@@ -1,0 +1,309 @@
+"""
+Generate Synthetic ACT.RESI and ACT.TEMP Profiles for Multiple Equipment/Recipe Combinations
+
+This script generates synthetic data for multiple (EQP_ID, RECIPE_ID) combinations
+using features extracted from real data.
+
+Based on features from: multi_eqp_profiles/multi_eqp_features.json
+
+Usage:
+python generate_multi_eqp_synthetic.py --features_json multi_eqp_profiles/multi_eqp_features.json --n_normal 500 --n_anomaly 50
+"""
+
+import argparse
+import json
+import os
+import sys
+
+import numpy as np
+import pandas as pd
+
+# Add parent directory to path for imports
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(**file**)))
+sys.path.append(BASE_DIR)
+
+def generate_ar1_process(n, rho, epsilon_std=1.0, seed=None):
+"""Generate AR(1) process."""
+if seed is not None:
+rng = np.random.RandomState(seed)
+else:
+rng = np.random.RandomState()
+
+```
+x = np.zeros(n)
+x[0] = rng.normal(0, epsilon_std / np.sqrt(1 - rho**2 + 1e-8))
+
+for t in range(1, n):
+    x[t] = rho * x[t-1] + rng.normal(0, epsilon_std)
+
+return x
+```
+
+def generate_normal_profile(
+mean_shape,
+std_shape,
+lag1_autocorr,
+raw_mean,
+raw_std,
+noise_factor=0.3,
+scale_factor=None,
+shift_factor=None,
+seed=None,
+):
+"""
+Generate a single normal profile preserving shape but with different scale/shift.
+"""
+rng = np.random.RandomState(seed)
+n = len(mean_shape)
+
+```
+# Different scale/shift (tighter range for more similarity)
+if scale_factor is None:
+    scale_factor = rng.uniform(0.95, 1.05)
+if shift_factor is None:
+    shift_factor = rng.normal(0, raw_std * 0.03)
+
+# Preserve shape with noise
+rho = np.mean(lag1_autocorr[:50]) if len(lag1_autocorr) > 50 else np.mean(lag1_autocorr)
+epsilon_std = np.mean(std_shape) * noise_factor
+noise = generate_ar1_process(n, rho, epsilon_std=epsilon_std, seed=rng.randint(0, 100000))
+
+# Combine shape + noise
+normalized_profile = mean_shape + noise
+
+# Apply different scale/shift
+raw_profile = normalized_profile * (raw_std * scale_factor) + (raw_mean + shift_factor)
+
+return raw_profile
+```
+
+def generate_anomaly_profile(
+mean_shape,
+std_shape,
+lag1_autocorr,
+raw_mean,
+raw_std,
+anomaly_type="spike",
+seed=None,
+):
+"""Generate a single anomaly profile."""
+rng = np.random.RandomState(seed)
+n = len(mean_shape)
+
+```
+# Base normal profile
+base = generate_normal_profile(
+    mean_shape, std_shape, lag1_autocorr,
+    raw_mean, raw_std,
+    seed=rng.randint(0, 100000),
+)
+
+# Apply anomaly
+if anomaly_type == "spike":
+    # Sudden amplitude spike at random position
+    spike_pos = rng.randint(50, 250)
+    spike_magnitude = rng.uniform(2.0, 4.0) * raw_std
+    base[spike_pos:spike_pos+10] += spike_magnitude
+
+elif anomaly_type == "noise":
+    # Increased noise level
+    noise = rng.normal(0, raw_std * 0.5, n)
+    base += noise
+
+elif anomaly_type == "baseline":
+    # Baseline shift
+    shift = rng.uniform(-2.0, 2.0) * raw_std
+    base += shift
+
+elif anomaly_type == "shape":
+    # Different shape morphology (sinusoidal perturbation)
+    x = np.arange(n)
+    perturbation = 0.5 * raw_std * np.sin(2 * np.pi * x / 100)
+    base += perturbation
+
+return base
+```
+
+def generate_synthetic_profiles_for_combination(
+features,
+n_normal=500,
+n_anomaly=50,
+n_wafer_groups=100,
+anomaly_ratio=0.1,
+seed=42,
+):
+"""Generate synthetic profiles for a single equipment/recipe combination."""
+rng = np.random.RandomState(seed)
+
+```
+# Extract features
+resi_features = features['resi']
+temp_features = features['temp']
+
+# Normalize mean_shape to have mean=0, std=1 for synthetic generation
+mean_resi_shape_raw = np.array(resi_features['mean_shape'])
+std_resi_shape = np.array(resi_features['std_shape'])
+lag1_autocorr_resi = np.array(resi_features['lag1_autocorr'])
+raw_resi_mean = resi_features['raw_mean']
+raw_resi_std = resi_features['raw_std']
+
+# Normalize RESI mean_shape
+mean_resi_shape = (mean_resi_shape_raw - np.mean(mean_resi_shape_raw)) / (np.std(mean_resi_shape_raw) + 1e-8)
+
+mean_temp_shape_raw = np.array(temp_features['mean_shape'])
+std_temp_shape = np.array(temp_features['std_shape'])
+lag1_autocorr_temp = np.array(temp_features['lag1_autocorr'])
+raw_temp_mean = temp_features['raw_mean']
+raw_temp_std = temp_features['raw_std']
+
+# Normalize TEMP mean_shape
+mean_temp_shape = (mean_temp_shape_raw - np.mean(mean_temp_shape_raw)) / (np.std(mean_temp_shape_raw) + 1e-8)
+
+# Anomaly types
+anomaly_types = ["spike", "noise", "baseline", "shape"]
+
+rows = []
+eqp_suffix = rng.randint(1, 100)
+
+# Generate normal profiles
+for i in range(n_normal):
+    wafer_id = f"WAF_SYNTH_{i:04d}"
+    xno = i % 50
+    yno = i // 50
+    eqp_id = f"APW_SYNTH_{eqp_suffix:03d}"
+    
+    # Different scale/shift for each profile
+    scale_resi = rng.uniform(0.95, 1.05)
+    shift_resi = rng.normal(0, raw_resi_std * 0.03)
+    scale_temp = rng.uniform(0.95, 1.05)
+    shift_temp = rng.normal(0, raw_temp_std * 0.03)
+    
+    act_resi_raw = generate_normal_profile(
+        mean_resi_shape, std_resi_shape, lag1_autocorr_resi,
+        raw_resi_mean, raw_resi_std,
+        noise_factor=0.3,
+        scale_factor=scale_resi, shift_factor=shift_resi,
+        seed=rng.randint(0, 100000),
+    )
+    
+    act_temp_raw = generate_normal_profile(
+        mean_temp_shape, std_temp_shape, lag1_autocorr_temp,
+        raw_temp_mean, raw_temp_std,
+        noise_factor=0.3,
+        scale_factor=scale_temp, shift_factor=shift_temp,
+        seed=rng.randint(0, 100000),
+    )
+    
+    rows.append({
+        "EQP_ID": eqp_id,
+        "WAFER_ID": wafer_id,
+        "XNO": xno,
+        "YNO": yno,
+        "act_resi_raw": act_resi_raw,
+        "act_temp_raw": act_temp_raw,
+        "final_label": "normal",
+    })
+
+# Generate anomaly profiles
+n_anomaly_actual = int(n_normal * anomaly_ratio)
+for i in range(n_anomaly_actual):
+    wafer_id = f"WAF_ANOM_{i:04d}"
+    xno = 100 + (i % 50)
+    yno = 100 + (i // 50)
+    eqp_id = f"APW_SYNTH_{eqp_suffix:03d}"
+    
+    # Random anomaly type
+    anomaly_type = rng.choice(anomaly_types)
+    
+    act_resi_raw = generate_anomaly_profile(
+        mean_resi_shape, std_resi_shape, lag1_autocorr_resi,
+        raw_resi_mean, raw_resi_std,
+        anomaly_type=anomaly_type,
+        seed=rng.randint(0, 100000),
+    )
+    
+    act_temp_raw = generate_anomaly_profile(
+        mean_temp_shape, std_temp_shape, lag1_autocorr_temp,
+        raw_temp_mean, raw_temp_std,
+        anomaly_type=anomaly_type,
+        seed=rng.randint(0, 100000),
+    )
+    
+    rows.append({
+        "EQP_ID": eqp_id,
+        "WAFER_ID": wafer_id,
+        "XNO": xno,
+        "YNO": yno,
+        "act_resi_raw": act_resi_raw,
+        "act_temp_raw": act_temp_raw,
+        "final_label": "anomaly",
+    })
+
+return pd.DataFrame(rows)
+```
+
+def main():
+parser = argparse.ArgumentParser(description='Generate Synthetic Profiles for Multiple Equipment/Recipe Combinations')
+parser.add_argument('--features_json', type=str, default='multi_eqp_profiles/multi_eqp_features.json',
+help='Path to features JSON file')
+parser.add_argument('--n_normal', type=int, default=500,
+help='Number of normal profiles per combination')
+parser.add_argument('--n_anomaly', type=int, default=50,
+help='Number of anomaly profiles per combination')
+parser.add_argument('--output_dir', type=str, default='multi_eqp_synthetic',
+help='Output directory for synthetic data')
+args = parser.parse_args()
+
+```
+# Create output directory
+os.makedirs(args.output_dir, exist_ok=True)
+
+# Load features
+print(f"Loading features from {args.features_json}...")
+with open(args.features_json, 'r') as f:
+    all_features = json.load(f)
+
+print(f"Found {len(all_features)} equipment/recipe combinations")
+
+# Generate synthetic data for each combination
+for key, data in all_features.items():
+    eqp_id = data['eqp_id']
+    recipe_id = data['recipe_id']
+    features = data['features']
+    
+    print(f"\nGenerating synthetic data for {eqp_id} / {recipe_id}...")
+    
+    # Generate synthetic profiles
+    df = generate_synthetic_profiles_for_combination(
+        features,
+        n_normal=args.n_normal,
+        n_anomaly=args.n_anomaly,
+        seed=42,
+    )
+    
+    # Convert arrays to strings for CSV storage
+    df['act_resi_str'] = df['act_resi_raw'].apply(lambda x: '[' + ', '.join([f'{v:.6f}' for v in x]) + ']')
+    df['act_temp_str'] = df['act_temp_raw'].apply(lambda x: '[' + ', '.join([f'{v:.6f}' for v in x]) + ']')
+    
+    # Drop raw arrays
+    df = df.drop(['act_resi_raw', 'act_temp_raw'], axis=1)
+    
+    # Save to CSV
+    output_path = os.path.join(args.output_dir, f"synthetic_{eqp_id}_{recipe_id}.csv")
+    df.to_csv(output_path, index=False)
+    
+    print(f"  Saved {len(df)} profiles to {output_path}")
+    print(f"  Normal: {len(df[df['final_label'] == 'normal'])}")
+    print(f"  Anomaly: {len(df[df['final_label'] == 'anomaly'])}")
+
+print("\n" + "="*60)
+print("GENERATION COMPLETE")
+print("="*60)
+print(f"All synthetic data saved to: {args.output_dir}/")
+```
+
+if **name** == '**main**':
+main()
+
+
