@@ -1,0 +1,62 @@
+{
+  "WFRAHXTHV": [
+    {
+      "key": "APW22A_5YS_P462_2",
+      "label": "normal",
+      "note": "ground truth from normalprofile.txt",
+      "updated_at": "2026-07-19"
+    },
+    {
+      "key": "APW19B_59S_P462_13",
+      "label": "abnormal",
+      "note": "ground truth from anomalprofile.txt",
+      "updated_at": "2026-07-19"
+    }
+  ],
+  "WFR30T9NT": [
+    {
+      "key": "APW43A_5LR_P462_4",
+      "label": "normal",
+      "note": "ground truth from normalprofile.txt",
+      "updated_at": "2026-07-19"
+    },
+    {
+      "key": "APW57B_5YA_P462_4",
+      "label": "abnormal",
+      "note": "ground truth from anomalprofile.txt",
+      "updated_at": "2026-07-19"
+    }
+  ],
+  "WFRWNNHJ7": [
+    {
+      "key": "APW49B_5XJ_P462_11",
+      "label": "normal",
+      "note": "ground truth from normalprofile.txt",
+      "updated_at": "2026-07-19"
+    }
+  ],
+  "WFRIBLJH7": [
+    {
+      "key": "APW61C_5YA_P462_7",
+      "label": "abnormal",
+      "note": "confirmed abnormal, retrained excluding it",
+      "updated_at": "2026-07-19"
+    }
+  ],
+  "WFROH9SDB": [
+    {
+      "key": "APW66B_5XJ_P462_9",
+      "label": "normal",
+      "note": "ground truth from normalprofile.txt",
+      "updated_at": "2026-07-19"
+    }
+  ],
+  "WFR3GDPPQ": [
+    {
+      "key": "APW73C_5YS_P462_3",
+      "label": "normal",
+      "note": "ground truth from normalprofile.txt",
+      "updated_at": "2026-07-19"
+    }
+  ]
+}
