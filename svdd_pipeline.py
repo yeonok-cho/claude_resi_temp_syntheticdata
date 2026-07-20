@@ -144,12 +144,21 @@ def _load_history(path=KEY_HISTORY_PATH):
         return {}
 
 
-def record_wafer_result(key, wafer_id, is_abnormal, path=KEY_HISTORY_PATH, threshold=CONSECUTIVE_THRESHOLD):
-    """Append this wafer's verdict to the key's rolling history. Returns True
-    (key should be flagged) once `threshold` consecutive wafers came back abnormal."""
+def record_wafer_result(key, wafer_id, verdict, path=KEY_HISTORY_PATH, threshold=CONSECUTIVE_THRESHOLD):
+    """Append this wafer's per-channel verdict (as returned by predict_wafer) to
+    the key's rolling history - keeps resi/temp separately, not just the overall
+    flag, so a later flag can be traced back to which channel caused it. Returns
+    True (key should be flagged) once `threshold` consecutive wafers came back
+    abnormal overall."""
     history = _load_history(path)
     runs = history.setdefault(key, [])
-    runs.append({'wafer_id': wafer_id, 'abnormal': bool(is_abnormal)})
+    runs.append({
+        'wafer_id': wafer_id,
+        'resi': verdict['resi'],
+        'temp': verdict['temp'],
+        'overall': verdict['overall'],
+        'abnormal': verdict['overall'] == 'abnormal',
+    })
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
     recent = runs[-threshold:]
@@ -194,7 +203,7 @@ if __name__ == '__main__':
         resi_wafer = generate_resi(profile_data, key, label='abnormal', n=1, seed=5000 + i)[0]
         temp_wafer = generate_temp(profile_data, key, label='abnormal', n=1, seed=6000 + i)[0]
         v = predict_wafer(profile_data, key, resi_wafer, temp_wafer, models)
-        flagged = record_wafer_result(key, wafer_id, v['overall'] == 'abnormal')
+        flagged = record_wafer_result(key, wafer_id, v)
         print(f"  wafer {i+1}: overall={v['overall']}, key flagged so far: {flagged}")
     if flagged:
         print(f"  -> {key} flagged after 5 consecutive abnormal wafers, confirming + retraining")

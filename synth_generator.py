@@ -12,6 +12,16 @@ NORMAL_HOLD_RANGE = (0.02, 0.06)
 ABNORMAL_HOLD_RANGE = (0.085, 0.10)
 
 
+def normalize_key(raw_key, head):
+    """'APW22A_5YS_P462_2' + 'LEFT' -> 'APW22A_5YS_2_LEFT'. Drops the process-step
+    token (e.g. P462 - constant across keys, no discriminative value) and appends
+    the head (LEFT/RIGHT), since left/right are physically different tools even
+    on the same wafer/recipe and must be tracked as separate keys."""
+    parts = raw_key.split('_')
+    kept = [p for p in parts if not re.match(r'^P\d+$', p)]
+    return '_'.join(kept + [head])
+
+
 def load_profile_data(path):
     with open(path, encoding='utf-8') as f:
         text = f.read()
